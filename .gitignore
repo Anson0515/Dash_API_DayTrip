@@ -416,3 +416,18 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+## Custom additions for Dash DayTrip API
+## Sensitive configuration files
+**/appsettings.json
+**/appsettings.Development.json
+**/appsettings.Production.json
+
+## Keep example file
+!**/appsettings.Example.json
+
+## Runtime files
+runtimes/
+*.dll
+*.exe
+*.pdb
