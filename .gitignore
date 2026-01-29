@@ -1,0 +1,9 @@
+﻿## Visual Studio
+.vs/
+*.suo
+*.user
+[Bb]in/
+[Oo]bj/
+**/appsettings.json
+**/appsettings.Development.json
+!**/appsettings.Example.json

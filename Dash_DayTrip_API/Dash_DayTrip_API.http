@@ -1,0 +1,88 @@
+File: Dash_DayTrip_API\Dash_DayTrip_API.http
+````````
+@Dash_DayTrip_API_HostAddress = http://localhost:5276
+
+GET {{Dash_DayTrip_API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+@baseUrl = https://localhost:7210
+
+### ========================================
+### STEP 1: CREATE FORM
+### ========================================
+
+POST {{baseUrl}}/api/Forms
+Content-Type: application/json
+
+{
+  "formId": "F001",
+  "title": "Tenggol Island Day Trip",
+  "status": "active",
+  "isDefault": true
+}
+
+###
+
+### Verify Form Created
+GET {{baseUrl}}/api/Forms/F001
+
+###
+
+### ========================================
+### STEP 2: CREATE PACKAGES
+### ========================================
+
+POST {{baseUrl}}/api/Packages
+Content-Type: application/json
+
+{
+  "packageId": "PKG001",
+  "formId": "F001",
+  "merchantId": "M001",
+  "packageName": "Snorkeling Package",
+  "description": "Full day snorkeling",
+  "price": 250.00,
+  "noOfPax": 2,
+  "availability": true
+}
+
+###
+
+### ========================================
+### STEP 3: CREATE BOOKING
+### ========================================
+
+POST {{baseUrl}}/api/DayTripBooking
+Content-Type: application/json
+
+{
+  "formId": "F001",
+  "merchantId": "M001",
+  "referenceNumber": "BK-001",
+  "status": "pending",
+  "customerName": "Ahmad",
+  "email": "ahmad@example.com",
+  "phone": "0123456789",
+  "grandTotal": 250.00,
+  "depositPaid": 100.00,
+  "balanceDue": 150.00
+}
+
+###
+
+### Get All Forms
+GET {{baseUrl}}/api/Forms
+
+###
+
+### Get All Packages
+GET {{baseUrl}}/api/Packages
+
+###
+
+### Get All Bookings
+GET {{baseUrl}}/api/DayTripBooking
+
+###
