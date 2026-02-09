@@ -1,38 +1,38 @@
 namespace Dash_DayTrip_API.Models.Responses
 {
-    public class BookingCreateResponse : ApiResponse
+    public class OrderCreateResponse : ApiResponse
     {
-        public DayTripBooking? Booking { get; set; }
+        public Order? Order { get; set; }
         public int PackagesCount { get; set; }
         public List<string> GeneratedIds { get; set; } = new();
     }
 
-    public class BookingUpdateResponse : ApiResponse
+    public class OrderUpdateResponse : ApiResponse
     {
-        public DayTripBooking? Booking { get; set; }
+        public Order? Order { get; set; }
         public int PackagesCount { get; set; }
         public int PackagesAdded { get; set; }
         public int PackagesUpdated { get; set; }
         public int PackagesDeleted { get; set; }
     }
 
-    public class BookingDeleteResponse : ApiResponse
+    public class OrderDeleteResponse : ApiResponse
     {
-        public string BookingId { get; set; } = string.Empty;
+        public string OrderId { get; set; } = string.Empty;
         public int PackagesDeleted { get; set; }
     }
 
-    public class BookingStatusUpdateResponse : ApiResponse
+    public class OrderStatusUpdateResponse : ApiResponse
     {
-        public string BookingId { get; set; } = string.Empty;
+        public string OrderId { get; set; } = string.Empty;
         public string PreviousStatus { get; set; } = string.Empty;
         public string NewStatus { get; set; } = string.Empty;
         public DateTime UpdatedAt { get; set; }
     }
 
-    public class BookingListResponse : ApiResponse
+    public class OrderListResponse : ApiResponse
     {
-        public List<DayTripBooking> Bookings { get; set; } = new();
+        public List<Order> Orders { get; set; } = new();
         public int TotalCount { get; set; }
         public int PageNumber { get; set; }
         public int PageSize { get; set; }

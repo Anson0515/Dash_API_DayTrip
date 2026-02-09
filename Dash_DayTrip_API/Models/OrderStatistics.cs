@@ -1,12 +1,12 @@
-namespace Dash_DayTrip_API.Models
+namespace Dash_DayTrip_API.Models.Responses
 {
-    public class BookingStatistics
+    public class OrderStatistics
     {
-        public int TotalBookings { get; set; }
+        public int TotalOrders { get; set; }
         public decimal TotalRevenue { get; set; }
         public decimal TotalDeposits { get; set; }
         public decimal OutstandingBalance { get; set; }
-        public int TodayBookings { get; set; }
+        public int TodayOrders { get; set; }
         public decimal TodayRevenue { get; set; }
         public int PendingCount { get; set; }
         public int ConfirmedCount { get; set; }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace Dash_DayTrip_API.Models
 {
@@ -41,6 +42,7 @@ namespace Dash_DayTrip_API.Models
         
         // Navigation property
         [ForeignKey("FormId")]
+        [JsonIgnore]  // Added to break circular reference for Swagger
         public virtual Form? Form { get; set; }
     }
 }

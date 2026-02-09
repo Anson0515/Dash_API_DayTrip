@@ -1,169 +1,152 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Dash_DayTrip_API.Models;
-using Dash_DayTrip_API.Models.Responses; // ADD THIS
 using Dash_DayTrip_API.Data;
 
 namespace Dash_DayTrip_API.Controllers
 {
+    public class CreateBookingRequest
+    {
+        public string OrderId { get; set; } = string.Empty;
+        public DateTime BookingDate { get; set; }
+        public int PaxCount { get; set; }
+        public string Status { get; set; } = "confirmed";
+    }
+
     [Route("api/[controller]")]
     [ApiController]
     public class BookingsController : ControllerBase
     {
         private readonly ApiContext _context;
-        private readonly ILogger<BookingsController> _logger; //ADD THIS
+        private readonly ILogger<BookingsController> _logger;
+        private const int MAX_PAX_PER_DATE = 3;
 
-        public BookingsController(ApiContext context, ILogger<BookingsController> logger) // UPDATE THIS
+        public BookingsController(ApiContext context, ILogger<BookingsController> logger)
         {
             _context = context;
-            _logger = logger; // ADD THIS
+            _logger = logger;
         }
 
         // GET: api/Bookings
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DayTripBooking>>> GetBookings()
+        public async Task<ActionResult<IEnumerable<object>>> GetBookings(
+            [FromQuery] DateTime? startDate = null,
+            [FromQuery] DateTime? endDate = null)
         {
-            return await _context.Bookings
-                .Include(b => b.BookingPackages)
-                .ToListAsync();
-        }
+            var query = _context.Bookings
+                .Include(b => b.Order)
+                .AsQueryable();
 
-        // GET: api/Bookings/{id}
-        [HttpGet("{id}")]
-        public async Task<ActionResult<DayTripBooking>> GetBooking(string id)
-        {
-            var booking = await _context.Bookings
-                .Include(b => b.BookingPackages)
-                .FirstOrDefaultAsync(b => b.BookingId == id);
-
-            if (booking == null)
+            if (startDate.HasValue)
             {
-                return NotFound();
+                query = query.Where(b => b.BookingDate >= startDate.Value);
             }
 
-            return booking;
+            if (endDate.HasValue)
+            {
+                query = query.Where(b => b.BookingDate <= endDate.Value);
+            }
+
+            var bookings = await query
+                .OrderBy(b => b.BookingDate)
+                .Select(b => new
+                {
+                    b.BookingId,
+                    b.OrderId,
+                    b.BookingDate,
+                    b.PaxCount,
+                    b.Status,
+                    b.CreatedAt,
+                    CustomerName = b.Order != null ? b.Order.CustomerName : null,
+                    ReferenceNumber = b.Order != null ? b.Order.ReferenceNumber : null
+                })
+                .ToListAsync();
+
+            return Ok(bookings);
+        }
+
+        // GET: api/Bookings/availability?date=2026-02-15
+        [HttpGet("availability")]
+        public async Task<ActionResult<object>> GetAvailability([FromQuery] DateTime date)
+        {
+            var totalPax = await _context.Bookings
+                .Where(b => b.BookingDate == date.Date && b.Status == "confirmed")
+                .SumAsync(b => b.PaxCount);
+
+            return Ok(new
+            {
+                BookingDate = date.Date,
+                TotalPax = totalPax,
+                RemainingCapacity = MAX_PAX_PER_DATE - totalPax,
+                MaxCapacity = MAX_PAX_PER_DATE
+            });
+        }
+
+        // GET: api/Bookings/calendar?start=2026-02-01&end=2026-02-28
+        [HttpGet("calendar")]
+        public async Task<ActionResult<IEnumerable<object>>> GetCalendarData(
+            [FromQuery] DateTime start,
+            [FromQuery] DateTime end)
+        {
+            var data = await _context.Bookings
+                .Where(b => b.BookingDate >= start.Date && b.BookingDate <= end.Date && b.Status == "confirmed")
+                .GroupBy(b => b.BookingDate)
+                .Select(g => new
+                {
+                    Date = g.Key,
+                    TotalPax = g.Sum(b => b.PaxCount),
+                    BookingCount = g.Count()
+                })
+                .ToListAsync();
+
+            return Ok(data);
         }
 
         // POST: api/Bookings
         [HttpPost]
-        public async Task<ActionResult<DayTripBooking>> CreateBooking([FromBody] DayTripBooking booking)
+        public async Task<ActionResult<Booking>> CreateBooking([FromBody] CreateBookingRequest request)
         {
-            booking.BookingId = Guid.NewGuid().ToString();
-            booking.CreatedAt = DateTime.UtcNow;
-            booking.UpdatedAt = DateTime.UtcNow;
+            // Validate order exists
+            var orderExists = await _context.Orders.AnyAsync(o => o.OrderId == request.OrderId);
+            if (!orderExists)
+            {
+                return BadRequest(new { message = "Invalid Order ID." });
+            }
+
+            // Check capacity
+            var currentPax = await _context.Bookings
+                .Where(b => b.BookingDate == request.BookingDate.Date && b.Status == "confirmed")
+                .SumAsync(b => b.PaxCount);
+
+            if (currentPax + request.PaxCount > MAX_PAX_PER_DATE)
+            {
+                return BadRequest(new
+                {
+                    message = $"Capacity exceeded for this date. Maximum {MAX_PAX_PER_DATE} pax allowed.",
+                    currentPax,
+                    remainingCapacity = MAX_PAX_PER_DATE - currentPax,
+                    requestedPax = request.PaxCount
+                });
+            }
+
+            var booking = new Booking
+            {
+                OrderId = request.OrderId,
+                BookingDate = request.BookingDate.Date,
+                PaxCount = request.PaxCount,
+                Status = request.Status,
+                CreatedAt = DateTime.UtcNow
+            };
 
             _context.Bookings.Add(booking);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetBooking), new { id = booking.BookingId }, booking);
+            return CreatedAtAction(nameof(GetBookings), new { id = booking.BookingId }, booking);
         }
-
-        // PUT: api/Bookings/{id}
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBooking(string id, [FromBody] DayTripBooking booking)
-        {
-            if (id != booking.BookingId)
-            {
-                return BadRequest("ID mismatch");
-            }
-
-            // 1. Fetch the EXISTING booking from database (with packages)
-            var existingBooking = await _context.Bookings
-                .Include(b => b.BookingPackages)
-                .FirstOrDefaultAsync(b => b.BookingId == id);
-
-            if (existingBooking == null)
-            {
-                return NotFound();
-            }
-
-            // 2. Update parent booking properties
-            _context.Entry(existingBooking).CurrentValues.SetValues(booking);
-            existingBooking.UpdatedAt = DateTime.UtcNow;
-
-            // 3. Handle child packages ONLY if provided
-            if (booking.BookingPackages != null)
-            {
-                existingBooking.BookingPackages ??= new List<BookingPackage>();
-
-                var newPackageIds = booking.BookingPackages.Select(p => p.BookingPackageId).ToList();
-
-                // A. DELETE packages that were removed
-                var packagesToDelete = existingBooking.BookingPackages
-                    .Where(p => !newPackageIds.Contains(p.BookingPackageId) && p.BookingPackageId != 0)
-                    .ToList();
-
-                if (packagesToDelete.Any())
-                {
-                    _context.BookingPackages.RemoveRange(packagesToDelete);
-                }
-
-                // B. ADD or UPDATE packages
-                foreach (var package in booking.BookingPackages)
-                {
-                    var existingPackage = existingBooking.BookingPackages
-                        .FirstOrDefault(p => p.BookingPackageId == package.BookingPackageId && p.BookingPackageId != 0);
-
-                    if (existingPackage != null)
-                    {
-                        // UPDATE existing package
-                        _context.Entry(existingPackage).CurrentValues.SetValues(package);
-                    }
-                    else
-                    {
-                        // INSERT new package
-                        package.BookingPackageId = 0; // Let DB generate new ID
-                        existingBooking.BookingPackages.Add(package);
-                    }
-                }
-            }
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!BookingExists(id))
-                {
-                    return NotFound();
-                }
-                throw;
-            }
-
-            return NoContent();
-        }
-        //[HttpPut("{id}")]
-        //public async Task<IActionResult> UpdateBooking(string id, [FromBody] DayTripBooking booking)
-        //{
-        //    if (id != booking.BookingId)
-        //    {
-        //        return BadRequest();
-        //    }
-
-        //    booking.UpdatedAt = DateTime.UtcNow;
-        //    _context.Entry(booking).State = EntityState.Modified;
-
-        //    try
-        //    {
-        //        await _context.SaveChangesAsync();
-        //    }
-        //    catch (DbUpdateConcurrencyException)
-        //    {
-        //        if (!BookingExists(id))
-        //        {
-        //            return NotFound();
-        //        }
-        //        throw;
-        //    }
-
-        //    return NoContent();
-        //}
 
         // DELETE: api/Bookings/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteBooking(string id)
+        public async Task<IActionResult> DeleteBooking(int id)
         {
             var booking = await _context.Bookings.FindAsync(id);
             if (booking == null)
@@ -175,76 +158,6 @@ namespace Dash_DayTrip_API.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        // GET: api/Bookings/statistics
-        [HttpGet("statistics")]
-        public async Task<ActionResult<BookingStatistics>> GetStatistics(
-            [FromQuery] string? formId = null,
-            [FromQuery] string? merchantId = null)
-        {
-            var query = _context.Bookings.AsQueryable();
-
-            if (!string.IsNullOrEmpty(formId))
-            {
-                query = query.Where(b => b.FormId == formId);
-            }
-
-            if (!string.IsNullOrEmpty(merchantId))
-            {
-                query = query.Where(b => b.MerchantId == merchantId);
-            }
-
-            var today = DateTime.Today;
-
-            var stats = new BookingStatistics
-            {
-                TotalBookings = await query.CountAsync(),
-                TotalRevenue = await query.SumAsync(b => b.GrandTotal),
-                TotalDeposits = await query.SumAsync(b => b.DepositPaid),
-                OutstandingBalance = await query.SumAsync(b => b.BalanceDue),
-                TodayBookings = await query.CountAsync(b => b.CreatedAt.Date == today),
-                TodayRevenue = await query.Where(b => b.CreatedAt.Date == today).SumAsync(b => b.GrandTotal),
-                PendingCount = await query.CountAsync(b => b.Status == "pending"),
-                ConfirmedCount = await query.CountAsync(b => b.Status == "confirmed"),
-                CompletedCount = await query.CountAsync(b => b.Status == "completed"),
-                CancelledCount = await query.CountAsync(b => b.Status == "cancelled")
-            };
-
-            return stats;
-        }
-
-        // GET: api/Bookings/form/{formId}
-        [HttpGet("form/{formId}")]
-        public async Task<ActionResult<IEnumerable<DayTripBooking>>> GetBookingsByForm(string formId)
-        {
-            return await _context.Bookings
-                .Where(b => b.FormId == formId)
-                .Include(b => b.BookingPackages)
-                .OrderByDescending(b => b.CreatedAt)
-                .ToListAsync();
-        }
-
-        // PATCH: api/Bookings/{id}/status
-        [HttpPatch("{id}/status")]
-        public async Task<IActionResult> UpdateBookingStatus(string id, [FromBody] string status)
-        {
-            var booking = await _context.Bookings.FindAsync(id);
-            if (booking == null)
-            {
-                return NotFound();
-            }
-
-            booking.Status = status;
-            booking.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            return Ok(new { BookingId = id, NewStatus = status });
-        }
-
-        private bool BookingExists(string id)
-        {
-            return _context.Bookings.Any(b => b.BookingId == id);
         }
     }
 }

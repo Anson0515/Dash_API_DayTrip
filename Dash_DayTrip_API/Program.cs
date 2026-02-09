@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Builder;
 using Dash_DayTrip_API.Data;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,15 +29,30 @@ builder.Services.AddControllers()
     });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// Configure Swagger with custom schema ID to avoid conflicts
+builder.Services.AddSwaggerGen(c =>
+{
+    // Fix schema naming conflicts
+    c.CustomSchemaIds(type => type.FullName);
+});
 
 var app = builder.Build();
+
+// Developer exception page FIRST to see actual errors
+if (app.Environment.IsDevelopment())
+{
+    app.UseDeveloperExceptionPage();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Dash DayTrip API v1");
+    });
 }
 
 app.UseStaticFiles();
@@ -45,7 +61,6 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseCors("AllowAll");
 
-//Comment Out When using local
 app.UseHttpsRedirection();
 
 app.UseAuthorization();

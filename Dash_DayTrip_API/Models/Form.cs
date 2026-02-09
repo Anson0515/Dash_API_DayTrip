@@ -35,13 +35,14 @@ namespace Dash_DayTrip_API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation properties
+        // Navigation properties - all ignored for Swagger schema generation
+        [JsonIgnore]
         public virtual FormSettings? FormSettings { get; set; }
 
         [JsonIgnore]
         public virtual ICollection<Package>? Packages { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<DayTripBooking>? Bookings { get; set; }
+        public virtual ICollection<Order>? Orders { get; set; }
     }
 }
